@@ -1,0 +1,427 @@
+PROGRAM Metodo_Quotient_Difference
+
+    IMPLICIT NONE 
+    INTEGER, ALLOCATABLE, DIMENSION(:) :: Historial
+    REAL(8), ALLOCATABLE, DIMENSION(:) :: P, Factores
+    COMPLEX(8), ALLOCATABLE, DIMENSION(:) :: Raices
+    REAL(8) tol
+    INTEGER N, indice_cambios, max_iter
+    
+    N = 4             !Orden polinomio
+    tol = 0.00001     !Tolerancia
+    max_iter = 220 !Cant Max de iteraciones
+    
+    !Declaramos el  tamaño de los vectores
+    ALLOCATE(P(0:N), Raices(1:N), Historial(1:15), Factores(1:15))
+    
+    !Inicializamos
+    indice_cambios = 0
+    P = 0
+    
+    !Valores Del Polinomio
+    P(0) = 4
+    P(1) = 0
+    P(2) = 5
+    P(3) = 0
+    P(4) = 1
+        
+    WRITE(*,*) 'Polinomio ingresado:'
+    WRITE(*,*) 'P(x) = '
+    CALL Imprimir(P, N)
+    CALL Graficar(P, N)
+    !Transformación inicial
+    CALL Transformaciones(P, N, Historial, Factores, indice_cambios)
+        
+    !Llamamos a QD con el nuevo polinomio
+    CALL QD(P, Raices, N, tol, max_iter)
+    
+    !Si se realizaron transformaciones debemos obtener las raices originales a partir de las transformaciones
+    IF (indice_cambios > 0) THEN
+    CALL Raices_originales(Historial, Factores, indice_cambios, Raices, N)
+    END IF
+    
+    !Mostramos las raices hayadas
+    CALL Muestra_Raices(P, Raices, N, tol)
+    
+    DEALLOCATE(P, Historial, Factores, Raices)
+       
+        
+    CONTAINS
+    
+    SUBROUTINE Transformaciones(P, N, Historial, Factores, indice_cambios)
+     INTEGER, DIMENSION(1:15) :: Historial
+     REAL(8), DIMENSION(1:15) :: Factores
+     REAL(8), DIMENSION(0:N)  :: P
+     REAL(8) factor
+     INTEGER N, eleccion, indice_cambios
+    
+        eleccion = 2; !Inicializo en cualquier valor dentro del rango para entrar al while
+        DO WHILE (eleccion <= 4 .AND. eleccion >= 1)
+            WRITE(*,*) 'Elija una transformacion:'
+            WRITE(*,*) '1: Homotecia efectuada sobre un polinomio.'
+            WRITE(*,*) '2: Homotecia sobre la indeterminada.'
+            WRITE(*,*) '3: Translacion efectuada sobre la indeterminada.'
+            WRITE(*,*) '4: Transformacion reciproca.'
+            WRITE(*,*) '0: Salir.'
+            eleccion=3
+            !READ(*,*) eleccion
+            IF (eleccion < 4 .AND. eleccion >= 1)  THEN
+                WRITE(*,'(A)', ADVANCE='NO') 'Ingrese factor c: '
+                !READ(*,*) factor
+                factor=4
+            END IF   
+                IF (eleccion==1) THEN
+                CALL HomoteciaPol(P, N, factor)
+                
+                ELSE IF (eleccion==2) THEN
+                CALL HomoteciaInd(P, N, factor)
+                
+                ELSE IF (eleccion==3) THEN
+                CALL TranslacionInd(P, N, factor)
+                  
+                ELSE IF (eleccion==4) THEN
+                CALL TransformacionRec(P, N)
+                END IF
+            
+            IF (eleccion <= 4 .AND. eleccion >= 1) THEN
+                WRITE(*,*) 'El polinomio transformado es:'
+                WRITE(*,*) 'Q(x) = '
+    
+                CALL Imprimir(P, N)
+                !CALL Graficar(P, N)
+                
+                indice_cambios = indice_cambios + 1
+                Historial(indice_cambios) = eleccion;
+                IF (eleccion == 4) THEN
+                    Factores(indice_cambios) = 0.
+                ELSE
+                    Factores(indice_cambios) = factor
+                END IF
+            END IF
+            eleccion=6
+        END DO
+    
+     END SUBROUTINE Transformaciones
+    
+    SUBROUTINE Imprimir(P, N)
+     REAL(8), DIMENSION(0:N) :: P
+     INTEGER N, i
+    
+        DO i=N, 1, -1
+            IF (P(i) /= 0 ) THEN
+            WRITE(*,'(F12.6, A, I2, A)', ADVANCE='NO') P(i), 'x^', i, ' + '
+            END IF
+        END DO
+        !Imprimimos el termino independiente
+        WRITE(*,'(F12.6, A, I2, A)', ADVANCE='NO') P(i)
+        WRITE(*,*)
+    
+    END SUBROUTINE Imprimir
+    
+    SUBROUTINE Graficar(P, N)
+     REAL(8), DIMENSION(0:N) :: P
+     INTEGER  N, a
+     REAL(8) f, i
+     !Creo un archivo con el polinomio especializado en puntos para graficarlo
+     !Los coeficientes varian con las transformaciones
+    
+     OPEN(UNIT=1, FILE='Datos.txt', STATUS='replace')
+     a=4
+     i=-4
+     DO WHILE (i<=a)
+     f=(P(4)*i**4)+(P(3)*i**3) + (P(2)*i**2) + (P(1)*i) +P(0)        !(P(4)*i**4)+
+     WRITE(1,*)i, f
+     i=i+0.01
+     END DO
+     CLOSE(1)
+     call system("gnuplot -persist script.p")
+    
+    END SUBROUTINE Graficar
+    
+    SUBROUTINE Raices_originales(Historial, Factores, indice_cambios, Raices, N)
+     INTEGER, DIMENSION(1:indice_cambios) :: Historial
+     REAL(8), DIMENSION(1:indice_cambios) :: Factores
+     COMPLEX(8), DIMENSION(1:N) :: Raices
+     INTEGER i, j, N, indice_cambios
+    
+        !Obtenemos las raices originales deshaciendo los cambios de forma inversa
+        DO i=indice_cambios, 1, -1
+            SELECT CASE(Historial(i))
+                !Caso1 no es necesario, no tiene efecto en las raices
+    
+                !Caso2: Homotecia sobre la indeterminada
+                CASE(2)
+                    Raices = Raices * Factores(i)
+    
+                !Caso3: Translación efectuada sobre la indeterminada 
+                CASE(3)
+                    Raices = Raices + Factores(i)
+    
+                !Caso4: Transformación reciproca 
+                CASE(4)
+                    DO j=1, N
+                        IF (Raices(j) /= 0) THEN
+                            Raices(j) = 1. / Raices(j)
+                        END IF
+                    END DO
+                END SELECT
+        END DO
+        
+    END SUBROUTINE Raices_originales
+    
+    SUBROUTINE Muestra_Raices(P, Raices, N, tol)
+     REAL(8), DIMENSION(0:N) :: P
+     COMPLEX(8), DIMENSION(1:N) :: Raices
+     REAL(8) tol
+     INTEGER i, N
+    
+        WRITE(*,'(A)', ADVANCE='NO') 'Raices del Polinomio P(x) = '
+        CALL Imprimir(P,N)
+        WRITE(*,'(F10.5)') P(0)
+        i=1
+        DO WHILE (i <= N)
+            IF (IMAG(Raices(i)) == 0.) THEN
+                WRITE(*,'(A, I2, A, F10.5)') ' x', i, ' = ', REAL(Raices(i))
+            ELSE IF (abs(REAL(Raices(i))) <= tol ) THEN
+                WRITE(*,'(A, I2, A, F10.5, A, F10.5, A)') ' x', i, ' = ', IMAG(Raices(i)), ' i'
+                i = i+1
+                WRITE(*,'(A, I2, A, F10.5, A, F10.5, A)') ' x', i, ' = ', IMAG(Raices(i)), ' i' 
+            ELSE 
+                WRITE(*,'(A, I2, A, F10.5, A, F10.5, A)') ' x', i, ' = ', REAL(Raices(i)), ' + ', IMAG(Raices(i)), ' i' 
+                i = i+1
+                WRITE(*,'(A, I2, A, F10.5, A, F10.5, A)') ' x', i, ' = ', REAL(Raices(i)), ' - ', abs(IMAG(Raices(i))), ' i' 
+            END IF
+            i = i+1
+        END DO
+    
+    END SUBROUTINE Muestra_Raices
+    
+    SUBROUTINE HomoteciaPol(P, N, c)
+     REAL(8), DIMENSION(0:N) :: P
+     REAL(8) c
+     INTEGER N
+        P = P * c
+    END SUBROUTINE HomoteciaPol
+    
+    SUBROUTINE HomoteciaInd(P, N, c)
+     REAL(8), DIMENSION(0:N) :: P
+     REAL(8) c
+     INTEGER i, N
+        DO i=1, N
+            P(i) = P(i) * c**i
+        END DO
+    END SUBROUTINE HomoteciaInd
+    
+    SUBROUTINE TranslacionInd(P, N, c)
+     REAL(8), DIMENSION(0:N) :: P, PAux
+     REAL(8) c
+     INTEGER i, ult, N
+        
+        !Grado del polinomio, ultimo exponente
+        ult = N    
+        PAux = P
+        
+        !Se evalua la funcion derivada, de 0 a N, en c y se divide por el factorial 
+        DO i=0, N
+            !El polinimio evaluado será un grado inferior al anterior cada vez
+            P(i) = Evaluar_Pol(PAux, ult, c)
+            P(i) = P(i) / Factorial(i)
+            !Se reduce el polinomio cada vez, se reduce ult en 1
+            CALL Derivada(PAux, ult)
+        END DO    
+    END SUBROUTINE TranslacionInd
+    
+    SUBROUTINE Derivada(P, N)
+     REAL(8), DIMENSION(0:N) :: P
+     INTEGER i, N
+        
+        DO i=0, N-1
+            P(i) = P(i+1) * (i+1)
+        END DO
+    
+        !Se desplazan los coeficientes
+        N = N - 1
+    
+    END SUBROUTINE Derivada
+    
+    FUNCTION Evaluar_Pol(P, N, x)
+     REAL(8), DIMENSION(0:N) :: P
+     REAL(8) Evaluar_Pol, x, x_acum, total
+     INTEGER i, N
+    
+        !Empezamos con el valor independiente
+        total = P(0)
+        x_acum = 1
+        DO i=1, N
+            !Guardamos el valor de x^i para ahorrar recursos
+            x_acum = x_acum*x
+            !Vamos agregando cada termino * x^i
+            total = total + P(i)*(x_acum)
+        END DO
+        Evaluar_Pol = total
+    
+    END FUNCTION Evaluar_Pol
+    
+    FUNCTION Factorial(x)
+     REAL(8) Factorial
+     INTEGER i, aux, x
+    
+        aux = 1
+        DO i=x, 1,-1
+            aux = aux * i
+        END DO
+        Factorial = aux
+    
+    END FUNCTION Factorial
+    
+    SUBROUTINE TransformacionRec(P, N)
+     REAL(8), DIMENSION(0:N) ::  P, PInv
+     INTEGER i, N
+        !Almacenamos el vector inverso en un vector auxiliar
+        DO i=0, N
+            PInv(N-i) = P(i)
+        END DO
+        !Ahora P tendra los valores de su inverso
+        P = PInv
+    
+    END SUBROUTINE TransformacionRec
+    
+    SUBROUTINE QD(P, Raices, N, tol, max_iter) !Algoritmo Quotient Difference
+     REAL(8), DIMENSION(0:N) :: P
+     REAL(8), DIMENSION(0:N) :: e !Errores de cada raiz
+     REAL(8), DIMENSION(1:N) :: Q , Q_ANT !Valores de cada raiz
+     REAL(8) u, v, tol, MaxError
+     COMPLEX(8), DIMENSION(1:N) :: Raices
+     COMPLEX(8) raiz1, raiz2 !Par de raices complejas
+     INTEGER i, iter, N, max_iter
+    
+        !Inicializamos las variables
+        Q = 0.
+        Q(1) = - P(N-1) / P(N)
+        e(0) = 0.
+        e(N) = 0.
+        
+        !Errores de la primera iteracion
+        DO i=1, N-1
+            e(i) = P(N-i-1) / P(N-i)
+        END DO
+        
+        !Imprimimos el titulo
+            WRITE(*,'(A)', ADVANCE='NO') 'Iteracion        e0         '   
+            DO i=1, N 
+                WRITE(*,'(A, I1, A, I1, A)', ADVANCE='NO') 'q', i,'         e', i,'         '
+            END DO
+            WRITE(*,*) 
+        
+        iter = 0
+        MaxError = 2 * tol
+    
+        !Mientras el maximo error no este por debajo de la cota y no se alcance el limite de iteraciones, el algoritmo continuara
+        DO WHILE (MaxError >= tol .AND. iter <= max_iter)
+            
+            !Imprimimos la iteracion i
+                WRITE(*,'(I5, A)', ADVANCE='NO') iter, '      '
+                DO i=1, N
+                    WRITE(*,'(F22.6)', ADVANCE='NO')  q(i)
+                END DO
+                WRITE(*,*)
+                DO i=0, N
+                    WRITE(*,'(F22.6)', ADVANCE='NO') e(i)
+                END DO
+                WRITE(*,*)
+    
+            Q_ANT = Q
+            DO i=1, N
+                Q(i) = e(i) - e(i-1) + Q(i)
+            END DO
+            DO i=1, N-1
+                e(i) = (Q(i+1) / Q(i)) * e(i)
+            END DO
+            !Calculamos el error maximo entre los errores obtenidos
+            MaxError = maxval(abs(e))
+            iter = iter+1        
+        END DO
+    
+        WRITE(*,*)
+        DO i=0, N-1
+            !Si hay raices complejas sus errores fluctuaran y nunca seran menores a la tolerancia
+            IF (abs(e(i)) > tol) THEN
+                v = (q_ant(i) * q(i+1))*(-1.)
+                u = q(i) + q(i+1)
+                WRITE(*,'(AF12.6AF12.6)') 'Se aplica Bairstow con: u=',u,',   v=',v  
+                !Se mejora el factor cuadratico con Bairstow 
+                CALL Bairstow (P, N, u, v, tol)
+    
+                !Se resuelve el sistema con u y v obtenidas en Bairstow
+                CALL ResolverBk(-u, -v, raiz1, raiz2)
+    
+                !Se obtiene el par de raices complejas
+                Raices(i) = raiz1
+                Raices(i+1) = raiz2
+            ELSE
+            !Si la raiz es real se guarda como un complejo con su y=0
+                Raices(i+1) = DCMPLX(q(i+1), 0.)
+            END IF
+        END DO
+    END SUBROUTINE QD
+            
+    SUBROUTINE Bairstow(A, N, u, v, tol)
+     REAL(8), DIMENSION(0:N) :: A
+     REAL(8) u, v, tol, h, k, Error
+     REAL(8) q, q_ant1, q_ant2 , p, p_ant1, p_ant2, p_ant3
+     INTEGER i, N
+    
+        Error = 2 * tol
+        DO WHILE(Error >= tol)
+            
+            !q(-2)=q(-1)=p(-2)=p(-1) = 0
+            q_ant1 = 0
+            q_ant2 = 0
+            p_ant1 = 0
+            p_ant2 = 0
+    
+            !Se recorren los terminos del polinomio obteniendo p y q
+            !Para posteriormente despejar h y k con sus valores
+            DO i=N, 1, -1
+                q = A(i) + u * q_ant1 + v * q_ant2
+                q_ant2 = q_ant1
+                q_ant1 = q
+                p = q + u * p_ant1 + v * p_ant2
+                p_ant3 = p_ant2
+                p_ant2 = p_ant1
+                p_ant1 = p
+            END DO
+    
+            !Ultima iteracion de k, ya que p llega a N-1
+            q = A(0) + u * q_ant1 + v * q_ant2
+            
+            !El error sera el mayor entre q(n) y q(n-1)
+            IF(abs(q) > abs(q_ant1))THEN
+                Error = abs(q)
+            ELSE
+                Error= abs(q_ant1)
+            END IF
+    
+            !Resolucion del sistema
+            h = (q * p_ant3 - q_ant1 * p_ant2)/(p_ant2**2.0 - p_ant1 * p_ant3)
+            k = (q_ant1 * p_ant1 - q * p_ant2) / (p_ant2**2.0 - p_ant1 * p_ant3)
+            
+            !Siguiente iteracion de m
+            !u(m+1) = u(m) + h,  v(m+1) = v(m) + k
+            u = u + h
+            v = v + k        
+        END DO
+            
+    END SUBROUTINE Bairstow
+    
+    SUBROUTINE ResolverBk(b, c, raiz1, raiz2)
+     REAL(8) :: b, c  ! b=u, c=v, a=1
+     COMPLEX(8) cuadr, raiz1, raiz2
+    
+        cuadr = (b**2. - 4.0*c)
+        raiz1 = (- b + sqrt(cuadr)) / 2.0
+        raiz2 = (- b - sqrt(cuadr)) / 2.0
+    
+    END SUBROUTINE ResolverBk
+    
+    END PROGRAM
